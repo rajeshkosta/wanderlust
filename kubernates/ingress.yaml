@@ -1,0 +1,46 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+
+metadata:
+  name: wanderlust-ingress
+  namespace: wanderlust
+
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"
+    nginx.ingress.kubernetes.io/proxy-body-size: "20m"
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "60"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "60"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "60"
+    nginx.ingress.kubernetes.io/enable-cors: "true"
+    nginx.ingress.kubernetes.io/cors-allow-origin: "*"
+    nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, PUT, DELETE, OPTIONS"
+    nginx.ingress.kubernetes.io/cors-allow-headers: "Authorization, Content-Type"
+
+spec:
+  ingressClassName: nginx
+
+  rules:
+  - host: wanderlust.local
+
+    http:
+      paths:
+
+      # Backend FIRST
+      - path: /api
+        pathType: Prefix
+
+        backend:
+          service:
+            name: backend
+            port:
+              number: 5000
+
+      # Frontend SECOND
+      - path: /
+        pathType: Prefix
+
+        backend:
+          service:
+            name: frontend
+            port:
+              number: 80

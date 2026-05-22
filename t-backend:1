@@ -1,0 +1,57 @@
+{
+    "taskDefinition": {
+        "taskDefinitionArn": "arn:aws:ecs:ap-south-1:339712745938:task-definition/wanderlust-backend:1",
+        "containerDefinitions": [
+            {
+                "name": "backend",
+                "image": "339712745938.dkr.ecr.ap-south-1.amazonaws.com/wanderlust-backend:latest",
+                "cpu": 0,
+                "portMappings": [
+                    {
+                        "containerPort": 5000,
+                        "hostPort": 5000,
+                        "protocol": "tcp"
+                    }
+                ],
+                "essential": true,
+                "environment": [],
+                "mountPoints": [],
+                "volumesFrom": [],
+                "systemControls": []
+            }
+        ],
+        "family": "wanderlust-backend",
+        "executionRoleArn": "arn:aws:iam::339712745938:role/ecsTaskExecutionRole",
+        "networkMode": "awsvpc",
+        "revision": 1,
+        "volumes": [],
+        "status": "ACTIVE",
+        "requiresAttributes": [
+            {
+                "name": "com.amazonaws.ecs.capability.ecr-auth"
+            },
+            {
+                "name": "ecs.capability.execution-role-ecr-pull"
+            },
+            {
+                "name": "com.amazonaws.ecs.capability.docker-remote-api.1.18"
+            },
+            {
+                "name": "ecs.capability.task-eni"
+            }
+        ],
+        "placementConstraints": [],
+        "compatibilities": [
+            "EC2",
+            "MANAGED_INSTANCES",
+            "FARGATE"
+        ],
+        "requiresCompatibilities": [
+            "FARGATE"
+        ],
+        "cpu": "512",
+        "memory": "1024",
+        "registeredAt": "2025-12-17T15:53:46.201000+05:30",
+        "registeredBy": "arn:aws:iam::339712745938:user/rajesh"
+    }
+}

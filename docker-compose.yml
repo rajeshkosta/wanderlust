@@ -1,0 +1,66 @@
+version: "3.8"
+
+services:
+
+  nginx:
+    container_name: nginx
+    image: nginx:latest
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf
+    depends_on:
+      - frontend
+      - backend
+    networks:
+      - wanderlust
+
+
+
+  frontend:
+    container_name: frontend
+    build: ./frontend
+    environment:
+      VITE_API_PATH: http://backend:5000
+    networks:
+      - wanderlust
+
+
+  backend:
+    container_name: backend
+    build: ./backend
+    environment:
+      MONGODB_URI: mongodb://mongo:27017/wanderlust
+      REDIS_URL: redis://redis:6379
+    depends_on:
+      - mongodb
+    networks:
+      - wanderlust
+
+  mongodb:
+    container_name: mongo
+    image: mongo:latest
+    volumes:
+      - ./backend/wanderlust_data:/data/db
+    networks:
+      - wanderlust
+
+
+  redis:
+    container_name: redis
+    restart: unless-stopped
+    image: redis:7.0.5-alpine
+    depends_on:
+      - mongodb
+
+    networks:
+      - wanderlust
+
+volumes:
+  wanderlust_data:
+
+networks:
+  wanderlust:
+    driver: bridge
+
