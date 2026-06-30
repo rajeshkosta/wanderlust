@@ -1,0 +1,5 @@
+wanderlust_data
+*.log
+node_modules
+Dockerfile
+.dockerignore
