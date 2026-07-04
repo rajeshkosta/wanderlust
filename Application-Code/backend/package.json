@@ -14,7 +14,7 @@
     "nodemon": "^3.0.1"
   },
   "scripts": {
-    "test": "jest --watchAll  --detectOpenHandles --verbose --coverage ",
+    "test": "jest --ci --runInBand --detectOpenHandles --verbose --coverage",
     "start": "node server.js",
     "build": "echo \"No build required for Express backend\"",
     "check": "prettier --check .",
