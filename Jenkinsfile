@@ -45,8 +45,10 @@ stages {
             catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE') {
                 sh '''
                 trivy fs . \
-                --format json \
-                --output reports/trivy-fs-report.json
+                  --scanners vuln,secret \
+                  --skip-dirs Application-code/backend/node_modules \
+                  --format json \
+                  --output reports/trivy-fs-report.json
                 '''
             }
         }
