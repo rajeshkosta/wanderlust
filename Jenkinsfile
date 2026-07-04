@@ -44,9 +44,12 @@ stages {
         steps {
             catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE') {
                 sh '''
+                mkdir -p reports
+    
                 trivy fs . \
                   --scanners vuln,secret \
-                  --skip-dirs Application-code/backend/node_modules \
+                  --skip-files "**/package-lock.json" \
+                  --skip-dirs "**/node_modules" \
                   --format json \
                   --output reports/trivy-fs-report.json
                 '''
