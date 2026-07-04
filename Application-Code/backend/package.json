@@ -16,6 +16,7 @@
   "scripts": {
     "test": "jest --watchAll  --detectOpenHandles --verbose --coverage ",
     "start": "node server.js",
+    "build": "echo \"No build required for Express backend\"",
     "check": "prettier --check .",
     "format": "prettier --write .",
     "vercel-build": "echo yay"
