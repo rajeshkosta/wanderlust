@@ -206,7 +206,7 @@ kind: Ingress
 metadata:
   name: three-tier-ingress
 spec:
-  ingressClassName: traefik
+  ingressClassName: nginx
 
   rules:
     - host: wanderlust.local
