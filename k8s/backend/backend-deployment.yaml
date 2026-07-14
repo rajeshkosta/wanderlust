@@ -138,7 +138,7 @@ metadata:
 type: Opaque
 stringData:
   MONGODB_URI: "mongodb://admin:admin123@wanderlust-mongodb-headless.database.svc.cluster.local:27017/test?authSource=admin&replicaSet=rs0"
-  REDIS_URL: "redis://wanderlust-redisdb-headless.svc.cluster.local:6379"
+  REDIS_URL: "redis://wanderlust-redisdb-headless.database.svc.cluster.local:6379"
 ---
 ## HPA
 apiVersion: autoscaling/v2
