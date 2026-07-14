@@ -59,7 +59,7 @@ spec:
             - |
               echo "Waiting for MongoDB..."
 
-              until nc -z wanderlust-db-mongodb-headless.database.svc.cluster.local 27017; do
+              until nc -z wanderlust-mongodb-headless.database.svc.cluster.local 27017; do
                 echo "MongoDB not ready yet..."
                 sleep 5
               done
@@ -137,8 +137,8 @@ metadata:
   name: secret-map
 type: Opaque
 stringData:
-  MONGODB_URI: "mongodb://admin:admin123@wanderlust-db-mongodb-headless.database.svc.cluster.local:27017/test?authSource=admin&replicaSet=rs0"
-  REDIS_URL: "redis://wanderlust-redis-headless.database.svc.cluster.local:6379"
+  MONGODB_URI: "mongodb://admin:admin123@wanderlust-mongodb-headless.database.svc.cluster.local:27017/test?authSource=admin&replicaSet=rs0"
+  REDIS_URL: "redis://wanderlust-redisdb-headless.svc.cluster.local:6379"
 ---
 ## HPA
 apiVersion: autoscaling/v2
