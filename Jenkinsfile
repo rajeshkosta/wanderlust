@@ -1,389 +1,804 @@
 pipeline {
 
-agent any
+    agent any
 
-parameters {
-    string(
-        name: 'PROJECT_NAME',
-        defaultValue: 'wanderlust',
-        description: 'Project Name'
-    )
-}
+    parameters {
 
-environment {
-    PROJECT_NAME = "${params.PROJECT_NAME}"
-    FRONTEND_IMAGE = "frontend"
-    ADMIN_IMAGE = "admin"
-    BACKEND_IMAGE = "backend"
-    TAG = "${BUILD_NUMBER}"
-    SCANNER_HOME = tool 'sonar-scanner'
-}
+        string(
+            name: 'PROJECT_NAME',
+            defaultValue: 'wanderlust',
+            description: 'Project Name'
+        )
 
-stages {
+    }
 
+    environment {
+
+        PROJECT_NAME = "${params.PROJECT_NAME}"
+
+        FRONTEND_IMAGE = "frontend"
+        BACKEND_IMAGE  = "backend"
+        ADMIN_IMAGE    = "admin"
+
+        TAG = "${BUILD_NUMBER}"
+
+        SCANNER_HOME = tool 'sonar-scanner'
+
+    }
+
+    stages {
+
+    /**********************************************************************
+     * CHECKOUT
+     **********************************************************************/
     stage('Checkout') {
+
         steps {
+
             checkout scm
-            sh 'mkdir -p reports'
+
+            sh '''
+            mkdir -p reports
+            '''
+
         }
     }
 
-    stage('Gitleaks Scan') {
-        steps {
-            catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE') {
-                sh '''
-                gitleaks detect \
-                --source . \
-                --report-format json \
-                --report-path reports/gitleaks-report.json
-                '''
-            }
-        }
-    }
+    /**********************************************************************
+     * DETECT PROJECT STRUCTURE
+     **********************************************************************/
+    stage('Detect Project Structure') {
 
-    stage('Trivy Filesystem Scan') {
         steps {
-            catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE') {
-                sh '''
-                trivy fs . \
-                  --scanners vuln,secret \
-                  --format json \
-                  --output reports/trivy-fs-report.json
-                '''
-            }
-        }
-    }
 
-    stage('Detect Language') {
-        steps {
             script {
+
+                echo "========================================"
+                echo " Detecting Project Structure"
+                echo "========================================"
+
+                env.HAS_FRONTEND = fileExists("Application-Code/frontend") ? "true" : "false"
+                env.HAS_BACKEND  = fileExists("Application-Code/backend")  ? "true" : "false"
+                env.HAS_ADMIN    = fileExists("Application-Code/admin")    ? "true" : "false"
+
+                echo "Frontend : ${env.HAS_FRONTEND}"
+                echo "Backend  : ${env.HAS_BACKEND}"
+                echo "Admin    : ${env.HAS_ADMIN}"
+
+                if (env.HAS_FRONTEND == "false" &&
+                    env.HAS_BACKEND == "false" &&
+                    env.HAS_ADMIN == "false") {
+
+                    error("No Application-Code structure found.")
+
+                }
+
+            }
+
+        }
+
+    }
+
+    /**********************************************************************
+     * DETECT BACKEND LANGUAGE
+     **********************************************************************/
+    stage('Detect Backend Language') {
+
+        when {
+            expression {
+                env.HAS_BACKEND == "true"
+            }
+        }
+
+        steps {
+
+            script {
+
+                echo "========================================"
+                echo " Detecting Backend Language"
+                echo "========================================"
 
                 if (fileExists('Application-Code/backend/pom.xml')) {
+
                     env.APP_LANG = "java"
+
                 }
                 else if (fileExists('Application-Code/backend/package.json')) {
+
                     env.APP_LANG = "nodejs"
+
                 }
                 else if (fileExists('Application-Code/backend/requirements.txt')) {
+
                     env.APP_LANG = "python"
+
                 }
                 else if (fileExists('Application-Code/backend/go.mod')) {
+
                     env.APP_LANG = "golang"
+
                 }
                 else {
-                    error("Unsupported Language")
+
+                    error("Unsupported Backend Language")
+
                 }
 
-                echo "Detected Language: ${env.APP_LANG}"
+                echo "Detected Language : ${env.APP_LANG}"
+
             }
+
         }
+
     }
 
-    stage('Backend Build') {
+    /**********************************************************************
+     * INSTALL DEPENDENCIES
+     **********************************************************************/
+    stage('Install Dependencies') {
+
         steps {
+
             script {
 
-                switch(env.APP_LANG) {
+                /**********************
+                 * BACKEND
+                 **********************/
+                if (env.HAS_BACKEND == "true") {
 
-                    case "java":
-                        dir('Application-Code/backend') {
-                            sh 'mvn clean package -DskipTests'
-                        }
-                        break
+                    dir('Application-Code/backend') {
 
-                    case "nodejs":
-                        dir('Application-Code/backend') {
-                            sh '''
-                            npm install
-                            npm run build
-                            '''
-                        }
-                        break
+                        switch(env.APP_LANG) {
 
-                    case "python":
-                        dir('Application-Code/backend') {
-                            sh '''
-                            python3 -m venv venv
-                            . venv/bin/activate
-                            pip install -r requirements.txt
-                            '''
-                        }
-                        break
+                            case "java":
 
-                    case "golang":
-                        dir('Application-Code/backend') {
-                            sh 'go build ./...'
+                                sh '''
+                                echo "Installing Maven Dependencies..."
+                                mvn clean install -DskipTests
+                                '''
+                                break
+
+                            case "nodejs":
+
+                                sh '''
+                                echo "Installing NodeJS Dependencies..."
+                                npm install
+                                '''
+                                break
+
+                            case "python":
+
+                                sh '''
+                                echo "Installing Python Dependencies..."
+
+                                python3 -m venv venv
+
+                                . venv/bin/activate
+
+                                pip install --upgrade pip
+
+                                pip install -r requirements.txt
+                                '''
+                                break
+
+                            case "golang":
+
+                                sh '''
+                                echo "Downloading Go Modules..."
+                                go mod download
+                                '''
+                                break
+
                         }
-                        break
+
+                    }
+
                 }
+
+                /**********************
+                 * FRONTEND
+                 **********************/
+                if (env.HAS_FRONTEND == "true") {
+
+                    dir('Application-Code/frontend') {
+
+                        sh '''
+                        echo "Installing Frontend Dependencies..."
+
+                        export NODE_OPTIONS=--openssl-legacy-provider
+
+                        npm install
+                        '''
+
+                    }
+
+                }
+
+                /**********************
+                 * ADMIN
+                 **********************/
+                if (env.HAS_ADMIN == "true") {
+
+                    dir('Application-Code/admin') {
+
+                        sh '''
+                        echo "Installing Admin Dependencies..."
+
+                        export NODE_OPTIONS=--openssl-legacy-provider
+
+                        npm install
+                        '''
+
+                    }
+
+                }
+
             }
+
         }
+
     }
 
-    stage('Frontend Build') {
 
-        when {
-            expression {
-                fileExists('Application-Code/frontend/package.json')
-            }
-        }
+    /**********************************************************************
+     * LINT
+     **********************************************************************/
+    stage('Lint') {
 
         steps {
 
-            dir('Application-Code/frontend') {
+            script {
 
-                sh '''
-                export NODE_OPTIONS=--openssl-legacy-provider
-                npm install
-                npm run build
-                '''
+                /**********************
+                 * Backend Lint
+                 **********************/
+                if (env.HAS_BACKEND == "true") {
+
+                    dir('Application-Code/backend') {
+
+                        switch(env.APP_LANG) {
+
+                            case "java":
+
+                                sh '''
+                                echo "Running Java Lint..."
+
+                                if [ -f pom.xml ]; then
+                                    mvn checkstyle:check || true
+                                fi
+                                '''
+
+                                break
+
+                            case "nodejs":
+
+                                sh '''
+                                echo "Running ESLint..."
+
+                                if [ -f package.json ]; then
+
+                                    if node -e "process.exit(require('./package.json').scripts?.lint ? 0 : 1)"; then
+                                        npm run lint || true
+                                    else
+                                        echo "No lint script found."
+                                    fi
+
+                                fi
+                                '''
+
+                                break
+
+                            case "python":
+
+                                sh '''
+                                echo "Running Pylint..."
+
+                                . venv/bin/activate
+
+                                pip install pylint >/dev/null 2>&1 || true
+
+                                find . -name "*.py" | xargs pylint || true
+                                '''
+
+                                break
+
+                            case "golang":
+
+                                sh '''
+                                echo "Running Go Lint..."
+
+                                golangci-lint run || true
+                                '''
+
+                                break
+
+                        }
+
+                    }
+
+                }
+
             }
+
         }
+
     }
 
-    stage('Admin Build') {
-
-        when {
-            expression {
-                fileExists('Application-Code/admin/package.json')
-            }
-        }
+    /**********************************************************************
+     * DEPENDENCY SCAN
+     **********************************************************************/
+    stage('Dependency Scan') {
 
         steps {
-            dir('Application-Code/admin') {
-                sh '''
-                export NODE_OPTIONS=--openssl-legacy-provider
-                npm install
-                npm run build
-                '''
+
+            script {
+
+                if (env.HAS_BACKEND == "true") {
+
+                    dir('Application-Code/backend') {
+
+                        switch(env.APP_LANG) {
+
+                            case "java":
+
+                                sh '''
+                                echo "Running OWASP Dependency Check..."
+                                dependency-check.sh --scan .  --format HTML  --format JSON  --out ../../reports/dependency-check || true
+                                '''
+                                break
+
+                            case "nodejs":
+
+                                sh '''
+                                echo "Running npm audit..."
+                                npm audit --audit-level=high || true
+                                '''
+                                break
+
+                            case "python":
+
+                                sh '''
+                                echo "Running pip-audit..."
+                                . venv/bin/activate
+                                pip install pip-audit >/dev/null 2>&1 || true
+                                pip-audit || true
+                                '''
+                                break
+
+                            case "golang":
+
+                                sh '''
+                                echo "Running govulncheck..."
+                                govulncheck ./... || true
+                                '''
+                                break
+
+                        }
+
+                    }
+
+                }
+
             }
+
         }
+
     }
 
+    /**********************************************************************
+     * UNIT TESTS
+     **********************************************************************/
     stage('Unit Tests') {
 
         steps {
 
             script {
 
-                switch(env.APP_LANG) {
+                if (env.HAS_BACKEND == "true") {
 
-                    case "java":
+                    dir('Application-Code/backend') {
 
-                        dir('Application-Code/backend') {
+                        switch(env.APP_LANG) {
 
-                            if (fileExists('pom.xml')) {
+                            case "java":
 
                                 sh '''
-                                echo "Running Java Tests..." mvn test || true
+                                echo "Running Java Tests..."
+                                mvn test || true
+                                '''
+                                break
+
+                            case "nodejs":
+
+                                sh '''
+                                echo "Running NodeJS Tests..."
+
+                                TEST_SCRIPT=$(node -p "require('./package.json').scripts?.test || ''")
+
+                                if [ -z "$TEST_SCRIPT" ] || \
+                                   [ "$TEST_SCRIPT" = "echo \\"Error: no test specified\\" && exit 1" ]; then
+
+                                    echo "No Unit Tests Configured."
+
+                                else
+
+                                    npm test || true
+
+                                fi
                                 '''
 
-                            } else {
+                                break
 
-                                echo "pom.xml not found. Skipping tests..."
-                            }
-                        }
+                            case "python":
 
-                        break
-
-
-                    case "nodejs":
-
-                        dir('Application-Code/backend') {
-
-                            sh '''
-                            TEST_SCRIPT=$(node -p "require('./package.json').scripts?.test || ''")
-
-                            if [ -z "$TEST_SCRIPT" ] || \
-                               [ "$TEST_SCRIPT" = "echo \\"Error: no test specified\\" && exit 1" ]; then
-
-                                echo "No NodeJS tests configured. Skipping..."
-    
-                            else
-
-                                echo "Running NodeJS Tests..."
-                                npm test || true
-
-                            fi
-                            '''
-                        }
-
-                        break
-
-
-                    case "python":
-
-                        dir('Application-Code/backend') {
-
-                            sh '''
-                            . venv/bin/activate
-
-                            if command -v pytest >/dev/null 2>&1; then
-
+                                sh '''
                                 echo "Running Python Tests..."
-                                pytest || true
 
-                            else
+                                . venv/bin/activate
 
-                                echo "pytest not installed. Skipping..."
+                                if command -v pytest >/dev/null 2>&1
+                                then
+                                    pytest || true
+                                else
+                                    echo "pytest not installed."
+                                fi
+                                '''
 
-                            fi
-                            '''
+                                break
+
+                            case "golang":
+
+                                sh '''
+                                echo "Running Go Tests..."
+
+                                go test ./... || true
+                                '''
+
+                                break
+
                         }
 
-                        break
+                    }
 
-
-                    case "golang":
-
-                        dir('Application-Code/backend') {
-
-                            sh '''
-                            echo "Running Golang Tests..."
-                            go test ./... || true
-                            '''
-                        }
-
-                        break
                 }
+
             }
+
         }
+
     }
 
-    stage('Detect Coverage Reports') {
+    /**********************************************************************
+     * COVERAGE REPORT DETECTION
+     **********************************************************************/
+    stage('Coverage') {
 
         steps {
-    
+
             sh '''
-            echo "Searching for coverage reports..."
-    
-            find . -type f \
-            \\( \
+
+            echo "======================================"
+            echo "Searching Coverage Reports"
+            echo "======================================"
+
+            find . -type f \\(
+
                 -name "lcov.info" -o \
                 -name "coverage.xml" -o \
                 -name "jacoco.xml" -o \
                 -name "*.exec" -o \
-                -name "coverage.out" \
+                -name "coverage.out"
+
             \\) || true
+
             '''
+
         }
+
     }
-    
-    stage('SonarQube Scan') {
+
+    /**********************************************************************
+     * SONARQUBE ANALYSIS
+     **********************************************************************/
+    stage('SonarQube Analysis') {
 
         steps {
-    
+
             catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE') {
-    
+
                 withSonarQubeEnv('sonarqube') {
-    
+
                     script {
-    
-                        switch(env.APP_LANG) {
-    
-                            case "java":
-                                dir('Application-Code/backend') {
-                                    sh '''
-                                    mvn sonar:sonar \
-                                    -Dsonar.projectKey=''' + PROJECT_NAME + '''-backend
-                                    '''
+
+                        if (env.HAS_BACKEND == "true") {
+
+                            dir('Application-Code/backend') {
+
+                                switch(env.APP_LANG) {
+
+                                    /**************** JAVA ****************/
+                                    case "java":
+
+                                        sh """
+                                        mvn sonar:sonar \
+                                        -Dsonar.projectKey=${PROJECT_NAME}-backend \
+                                        -Dsonar.projectName=${PROJECT_NAME}-backend
+                                        """
+
+                                        break
+
+                                    /**************** NODEJS ****************/
+                                    case "nodejs":
+
+                                        sh """
+                                        ${SCANNER_HOME}/bin/sonar-scanner \
+                                        -Dsonar.projectKey=${PROJECT_NAME}-backend \
+                                        -Dsonar.projectName=${PROJECT_NAME}-backend \
+                                        -Dsonar.sources=. \
+                                        -Dsonar.sourceEncoding=UTF-8 \
+                                        -Dsonar.javascript.lcov.reportPaths=coverage/lcov.info
+                                        """
+
+                                        break
+
+                                    /**************** PYTHON ****************/
+                                    case "python":
+
+                                        sh """
+                                        ${SCANNER_HOME}/bin/sonar-scanner \
+                                        -Dsonar.projectKey=${PROJECT_NAME}-backend \
+                                        -Dsonar.projectName=${PROJECT_NAME}-backend \
+                                        -Dsonar.sources=. \
+                                        -Dsonar.python.coverage.reportPaths=coverage.xml
+                                        """
+
+                                        break
+
+                                    /**************** GOLANG ****************/
+                                    case "golang":
+
+                                        sh """
+                                        ${SCANNER_HOME}/bin/sonar-scanner \
+                                        -Dsonar.projectKey=${PROJECT_NAME}-backend \
+                                        -Dsonar.projectName=${PROJECT_NAME}-backend \
+                                        -Dsonar.sources=. \
+                                        -Dsonar.go.coverage.reportPaths=coverage.out
+                                        """
+
+                                        break
+
                                 }
-                                break
-    
-                            case "nodejs":
-                                dir('Application-Code/backend') {
-                                    sh """
-                                    ${SCANNER_HOME}/bin/sonar-scanner \
-                                    -Dsonar.projectKey=${PROJECT_NAME}-backend \
-                                    -Dsonar.sources=. \
-                                    -Dsonar.sourceEncoding=UTF-8
-                                    """
-                                }
-                                break
-    
-                            case "python":
-                                dir('Application-Code/backend') {
-                                    sh """
-                                    ${SCANNER_HOME}/bin/sonar-scanner \
-                                    -Dsonar.projectKey=${PROJECT_NAME}-backend \
-                                    -Dsonar.sources=.
-                                    """
-                                }
-                                break
-    
-                            case "golang":
-                                dir('Application-Code/backend') {
-                                    sh """
-                                    ${SCANNER_HOME}/bin/sonar-scanner \
-                                    -Dsonar.projectKey=${PROJECT_NAME}-backend \
-                                    -Dsonar.sources=.
-                                    """
-                                }
-                                break
+
+                            }
+
                         }
+
                     }
+
                 }
+
             }
+
         }
+
     }
 
+    /**********************************************************************
+     * SONAR QUALITY GATE
+     **********************************************************************/
     stage('Quality Gate') {
 
         steps {
 
             timeout(time: 10, unit: 'MINUTES') {
 
-                waitForQualityGate abortPipeline: false
+                waitForQualityGate abortPipeline: true
+
             }
+
         }
+
     }
 
-    stage('Build Frontend Image') {
-
-        when {
-            expression {
-                fileExists('Application-Code/frontend/Dockerfile')
-            }
-        }
-        steps {
-            sh """
-            docker build -t ${FRONTEND_IMAGE}:${TAG} -f Application-Code/frontend/Dockerfile Application-Code/frontend
-            """
-        }
-    }
-
-
-    stage('Build Backend Image') {
-
-        when {
-            expression {
-                fileExists('Application-Code/backend/Dockerfile')
-            }
-        }
+    /**********************************************************************
+     * TRIVY FILESYSTEM SCAN
+     **********************************************************************/
+    stage('Trivy Filesystem Scan') {
 
         steps {
-            sh """
-            docker build -t ${BACKEND_IMAGE}:${TAG} -f Application-Code/backend/Dockerfile Application-Code/backend
-            """
+
+            catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE') {
+
+                sh '''
+
+                mkdir -p reports/trivy
+
+                echo "===================================="
+                echo "Trivy Filesystem Scan"
+                echo "===================================="
+
+                trivy fs . \
+                    --scanners vuln,secret,misconfig \
+                    --format json \
+                    --output reports/trivy/trivy-fs-report.json
+
+                trivy fs . \
+                    --scanners vuln,secret,misconfig \
+                    --format template \
+                    --template "@/usr/local/share/trivy/templates/html.tpl" \
+                    --output reports/trivy/trivy-fs-report.html
+
+                '''
+
+            }
+
         }
+
     }
 
-    stage('Build Admin Image') {
-
-        when {
-            expression {
-                fileExists('Application-Code/admin/Dockerfile')
-            }
-        }
+    /**********************************************************************
+     * APPLICATION BUILD
+     **********************************************************************/
+    stage('Build') {
 
         steps {
-            sh """
-            docker build -t ${ADMIN_IMAGE}:${TAG} -f Application-Code/admin/Dockerfile Application-Code/admin
-            """
-        }
-    }
-    
 
+            script {
+
+                /**********************
+                 * BACKEND BUILD
+                 **********************/
+                if (env.HAS_BACKEND == "true") {
+
+                    dir('Application-Code/backend') {
+
+                        switch(env.APP_LANG) {
+
+                            case "java":
+
+                                sh '''
+                                echo "Building Java Application..."
+                                mvn clean package -DskipTests
+                                '''
+
+                                break
+
+                            case "nodejs":
+
+                                sh '''
+                                echo "Building NodeJS Application..."
+                                npm run build
+                                '''
+
+                                break
+
+                            case "python":
+
+                                sh '''
+                                echo "Python application detected."
+                                echo "No build step required."
+                                '''
+
+                                break
+
+                            case "golang":
+
+                                sh '''
+                                echo "Building Go Application..."
+                                go build ./...
+                                '''
+
+                                break
+
+                        }
+
+                    }
+
+                }
+
+                /**********************
+                 * FRONTEND BUILD
+                 **********************/
+                if (env.HAS_FRONTEND == "true") {
+
+                    dir('Application-Code/frontend') {
+
+                        sh '''
+
+                        echo "Building Frontend..."
+
+                        export NODE_OPTIONS=--openssl-legacy-provider
+
+                        npm run build
+
+                        '''
+
+                    }
+
+                }
+
+                /**********************
+                 * ADMIN BUILD
+                 **********************/
+                if (env.HAS_ADMIN == "true") {
+
+                    dir('Application-Code/admin') {
+
+                        sh '''
+
+                        echo "Building Admin..."
+
+                        export NODE_OPTIONS=--openssl-legacy-provider
+
+                        npm run build
+
+                        '''
+
+                    }
+
+                }
+
+            }
+
+        }
+
+    }
+
+
+    /**********************************************************************
+     * DOCKER BUILD
+     **********************************************************************/
+    stage('Docker Build') {
+
+        steps {
+
+            script {
+
+                if (env.HAS_FRONTEND == "true" &&
+                    fileExists('Application-Code/frontend/Dockerfile')) {
+
+                    sh """
+                    docker build \
+                    -t ${FRONTEND_IMAGE}:${TAG} \
+                    -f Application-Code/frontend/Dockerfile \
+                    Application-Code/frontend
+                    """
+
+                }
+
+                if (env.HAS_BACKEND == "true" &&
+                    fileExists('Application-Code/backend/Dockerfile')) {
+
+                    sh """
+                    docker build \
+                    -t ${BACKEND_IMAGE}:${TAG} \
+                    -f Application-Code/backend/Dockerfile \
+                    Application-Code/backend
+                    """
+
+                }
+
+                if (env.HAS_ADMIN == "true" &&
+                    fileExists('Application-Code/admin/Dockerfile')) {
+
+                    sh """
+                    docker build \
+                    -t ${ADMIN_IMAGE}:${TAG} \
+                    -f Application-Code/admin/Dockerfile \
+                    Application-Code/admin
+                    """
+
+                }
+
+            }
+
+        }
+
+    }
+
+    /**********************************************************************
+     * TRIVY IMAGE SCAN
+     **********************************************************************/
     stage('Trivy Image Scan') {
 
         steps {
@@ -391,313 +806,198 @@ stages {
             catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE') {
 
                 sh '''
-                mkdir -p reports
 
-                docker image inspect frontend:${TAG} >/dev/null 2>&1 && \
-                trivy image \
-                --format json \
-                --output reports/trivy-frontend-image-report.json \
-                frontend:${TAG} || true
+                mkdir -p reports/trivy
+                mkdir -p reports/sbom
 
-                docker image inspect backend:${TAG} >/dev/null 2>&1 && \
-                trivy image \
-                --format json \
-                --output reports/trivy-backend-image-report.json \
-                backend:${TAG} || true
+                scan_image() {
 
-                docker image inspect admin:${TAG} >/dev/null 2>&1 && \
-                trivy image \
-                --format json \
-                --output reports/trivy-admin-image-report.json \
-                admin:${TAG} || true
+                    IMAGE=$1
+                    NAME=$2
+
+                    if docker image inspect ${IMAGE} >/dev/null 2>&1; then
+
+                        echo "Scanning ${IMAGE}"
+
+                        ############################################
+                        # JSON Report
+                        ############################################
+
+                        trivy image  --format json --output reports/trivy/${NAME}.json ${IMAGE}
+
+                        ############################################
+                        # HTML Report
+                        ############################################
+
+                        trivy image --format template --template "@/usr/local/share/trivy/templates/html.tpl" --output reports/trivy/${NAME}.html ${IMAGE}
+
+                        ############################################
+                        # SBOM
+                        ############################################
+
+                        trivy image  --format cyclonedx  --output reports/sbom/${NAME}-sbom.json  ${IMAGE}
+
+                        ############################################
+                        # Fail Build
+                        ############################################
+
+                        trivy image --severity HIGH,CRITICAL --exit-code 1 ${IMAGE}
+
+                    else
+
+                        echo "${IMAGE} not found"
+
+                    fi
+
+                }
+
+                scan_image frontend:${TAG} frontend
+                scan_image backend:${TAG} backend
+                scan_image admin:${TAG} admin
+
                 '''
+
             }
+
         }
+
     }
 
-    
-    stage('Build & Push Docker Images to DockerHub') {
+    /**********************************************************************
+     * PUSH IMAGE TO NEXUS
+     **********************************************************************/
+    stage('Push Image') {
 
-    steps {
+        steps {
 
-        withCredentials([
-            usernamePassword(
-                credentialsId: 'dockerhub-cred',
-                usernameVariable: 'DOCKER_USER',
-                passwordVariable: 'DOCKER_PASS'
-            )
-        ]) {
+            withCredentials([
 
-            sh '''
+                usernamePassword(
 
-            echo "Logging into Docker Hub..."
+                    credentialsId: 'nexus-docker-cred',
 
-            echo $DOCKER_PASS | docker login \
-            -u $DOCKER_USER \
-            --password-stdin
+                    usernameVariable: 'NEXUS_USER',
 
+                    passwordVariable: 'NEXUS_PASS'
 
-            FRONTEND_REPO=$DOCKER_USER/${PROJECT_NAME}-frontend
-            BACKEND_REPO=$DOCKER_USER/${PROJECT_NAME}-backend
-            ADMIN_REPO=$DOCKER_USER/${PROJECT_NAME}-admin
+                )
 
+            ]) {
 
-            echo "Docker Hub repositories are ready."
+                sh '''
 
+                NEXUS_URL=localhost:32770
 
-            #################################
-            # FRONTEND
-            #################################
+                echo "$NEXUS_PASS" | docker login -u "$NEXUS_USER"    --password-stdin $NEXUS_URL
 
-            if docker image inspect frontend:${TAG} >/dev/null 2>&1; then
+                ###################################################
+                # FRONTEND
+                ###################################################
 
-                docker tag frontend:${TAG} $FRONTEND_REPO:${TAG}
-                docker tag frontend:${TAG} $FRONTEND_REPO:latest
+                if docker image inspect frontend:${TAG} >/dev/null 2>&1
+                then
 
+                    docker tag frontend:${TAG}  $NEXUS_URL/${PROJECT_NAME}-frontend:${TAG}
 
-                docker push $FRONTEND_REPO:${TAG}
-                docker push $FRONTEND_REPO:latest
+                    docker push $NEXUS_URL/${PROJECT_NAME}-frontend:${TAG}
 
-            fi
+                fi
 
+                ###################################################
+                # BACKEND
+                ###################################################
 
+                if docker image inspect backend:${TAG} >/dev/null 2>&1
+                then
 
-            #################################
-            # BACKEND
-            #################################
+                    docker tag backend:${TAG} $NEXUS_URL/${PROJECT_NAME}-backend:${TAG}
 
-            if docker image inspect backend:${TAG} >/dev/null 2>&1; then
+                    docker push $NEXUS_URL/${PROJECT_NAME}-backend:${TAG}
 
-                docker tag backend:${TAG} $BACKEND_REPO:${TAG}
-                docker tag backend:${TAG} $BACKEND_REPO:latest
+                fi
 
+                ###################################################
+                # ADMIN
+                ###################################################
 
-                docker push $BACKEND_REPO:${TAG}
-                docker push $BACKEND_REPO:latest
+                if docker image inspect admin:${TAG} >/dev/null 2>&1
+                then
 
-            fi
+                    docker tag admin:${TAG} $NEXUS_URL/${PROJECT_NAME}-admin:${TAG}
 
+                    docker push $NEXUS_URL/${PROJECT_NAME}-admin:${TAG}
 
+                fi
 
-            #################################
-            # ADMIN
-            #################################
+                docker logout $NEXUS_URL
 
-            if docker image inspect admin:${TAG} >/dev/null 2>&1; then
+                '''
 
-                docker tag admin:${TAG} $ADMIN_REPO:${TAG}
-                docker tag admin:${TAG} $ADMIN_REPO:latest
+            }
 
-
-                docker push $ADMIN_REPO:${TAG}
-                docker push $ADMIN_REPO:latest
-
-            fi
-
-
-
-            #################################
-            # CLEANUP
-            #################################
-
-            echo "Cleaning Docker Images..."
-
-
-            # Remove local images
-
-            docker rmi frontend:${TAG} || true
-            docker rmi backend:${TAG} || true
-            docker rmi admin:${TAG} || true
-
-
-
-            # Remove DockerHub tagged images
-
-            docker rmi $FRONTEND_REPO:${TAG} || true
-            docker rmi $FRONTEND_REPO:latest || true
-
-            docker rmi $BACKEND_REPO:${TAG} || true
-            docker rmi $BACKEND_REPO:latest || true
-
-            docker rmi $ADMIN_REPO:${TAG} || true
-            docker rmi $ADMIN_REPO:latest || true
-
-
-
-            # Remove dangling images
-
-            docker logout || true
-
-            echo "Docker Hub Push Completed Successfully"
-
-            '''
         }
+
     }
-}
-        
-// #    stage('Build & Push Docker Images to ECR') {
 
-// #    steps {
+} // End stages
 
-// #        withCredentials([
-// #            [$class: 'AmazonWebServicesCredentialsBinding',
-// #             credentialsId: 'aws-ecr-cred']
-// #        ]) {
 
-// #            sh '''
-// #            ACCOUNT_ID=593402827159
-// #            AWS_REGION=ap-south-1
-
-// #            ECR_URL=$ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com
-
-// #            FRONTEND_REPO=${PROJECT_NAME}-frontend
-// #            BACKEND_REPO=${PROJECT_NAME}-backend
-// #            ADMIN_REPO=${PROJECT_NAME}-admin
-
-//             # Login to ECR
-// #            aws ecr get-login-password --region $AWS_REGION | \
-// #            docker login --username AWS --password-stdin $ECR_URL
-// #            echo "Checking ECR repositories..."
-
-//             # Frontend Repository
-// #            aws ecr describe-repositories \
-// #            --repository-names $FRONTEND_REPO \
-// #            --region $AWS_REGION >/dev/null 2>&1 || \
-// #            aws ecr create-repository \
-// #            --repository-name $FRONTEND_REPO \
-// #            --region $AWS_REGION
-            
-//             # Backend Repository
-// #            aws ecr describe-repositories \
-// #            --repository-names $BACKEND_REPO \
-// #            --region $AWS_REGION >/dev/null 2>&1 || \
-// #            aws ecr create-repository \
-// #            --repository-name $BACKEND_REPO \
-// #            --region $AWS_REGION
-            
-//             # Admin Repository
-// #            aws ecr describe-repositories \
-// #            --repository-names $ADMIN_REPO \
-// #            --region $AWS_REGION >/dev/null 2>&1 || \
-// #            aws ecr create-repository \
-// #            --repository-name $ADMIN_REPO \
-// #            --region $AWS_REGION
-            
-// #            echo "Repositories are ready."
-
-//             # Frontend
-// #            if docker image inspect frontend:${TAG} >/dev/null 2>&1; then
-
-// #                docker tag frontend:${TAG} $ECR_URL/${FRONTEND_REPO}:${TAG}
-// #                docker tag frontend:${TAG} $ECR_URL/${FRONTEND_REPO}:latest
-
-// #                docker push $ECR_URL/${FRONTEND_REPO}:${TAG}
-// #                docker push $ECR_URL/${FRONTEND_REPO}:latest
-
-// #            fi
-
-//             # Backend
-// #            if docker image inspect backend:${TAG} >/dev/null 2>&1; then
-
-// #                docker tag backend:${TAG} $ECR_URL/${BACKEND_REPO}:${TAG}
-// #                docker tag backend:${TAG} $ECR_URL/${BACKEND_REPO}:latest
-
-// #                docker push $ECR_URL/${BACKEND_REPO}:${TAG}
-// #                docker push $ECR_URL/${BACKEND_REPO}:latest
-
-// #            fi
-
-//             # Admin
-// #            if docker image inspect admin:${TAG} >/dev/null 2>&1; then
-
-// #                docker tag admin:${TAG} $ECR_URL/${ADMIN_REPO}:${TAG}
-// #                docker tag admin:${TAG} $ECR_URL/${ADMIN_REPO}:latest
-
-// #                docker push $ECR_URL/${ADMIN_REPO}:${TAG}
-// #                docker push $ECR_URL/${ADMIN_REPO}:latest
-
-// #            fi
-//             #################################
-//             # CLEANUP
-//             #################################
-
-// #            echo "Cleaning Docker Images..."
-
-//             # Cleanup local images
-// #            docker rmi frontend:${TAG} || true
-// #            docker rmi backend:${TAG} || true
-// #            docker rmi admin:${TAG} || true
-
-//             # Cleanup ECR tagged images
-// #            docker rmi $ECR_URL/${FRONTEND_REPO}:${TAG} || true
-// #            docker rmi $ECR_URL/${FRONTEND_REPO}:latest || true
-
-// #            docker rmi $ECR_URL/${BACKEND_REPO}:${TAG} || true
-// #            docker rmi $ECR_URL/${BACKEND_REPO}:latest || true
-
-// #            docker rmi $ECR_URL/${ADMIN_REPO}:${TAG} || true
-// #            docker rmi $ECR_URL/${ADMIN_REPO}:latest || true
-
-// #            docker logout $ECR_URL || true
-
-// #            '''
-// #        }
-// #    }
-// #}  
-
-}
-
+/***************************************************************
+ * POST ACTIONS
+ ***************************************************************/
 post {
 
     always {
 
-        script {
+        archiveArtifacts(
 
-            if (fileExists('.')) {
+            artifacts: '''
+reports/**/*,
+**/coverage/**/*,
+**/lcov.info,
+**/coverage.xml,
+**/jacoco.xml,
+**/*.exec,
+**/coverage.out,
+**/target/*.jar,
+**/target/surefire-reports/**/*,
+**/dist/**/*,
+**/build/**/*,
+**/*.log
+''',
 
-                archiveArtifacts(
-                    artifacts: '''
-                    reports/**/*,
-                    **/coverage/**/*,
-                    **/lcov.info,
-                    **/coverage.xml,
-                    **/jacoco.xml,
-                    **/coverage.out,
-                    **/*.exec,
-                    **/target/*.jar,
-                    **/target/surefire-reports/**/*,
-                    **/dist/**/*,
-                    **/build/**/*,
-                    **/*.log
-                    '''.trim(),
+            excludes: '''
+**/node_modules/**,
+**/.npm/**,
+**/.cache/**
+''',
 
-                    excludes: '''
-                    **/node_modules/**,
-                    **/Application-Code/**/node_modules/**,
-                    **/.npm/**,
-                    **/.cache/**
-                    '''.trim(),
-                
-                    fingerprint: true,
-                    allowEmptyArchive: true
-                )
-            }
-        }
+            fingerprint: true,
+
+            allowEmptyArchive: true
+
+        )
 
         cleanWs notFailBuild: true
+
     }
 
     success {
-        echo 'Pipeline Success'
+
+        echo "Pipeline Completed Successfully"
+
     }
 
     unstable {
-        echo 'Pipeline Completed With Security Findings'
+
+        echo "Pipeline Completed with Security Findings"
+
     }
 
     failure {
-        echo 'Pipeline Failed'
+
+        echo "Pipeline Failed"
+
     }
-}
 
 }
