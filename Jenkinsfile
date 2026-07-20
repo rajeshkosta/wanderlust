@@ -481,16 +481,14 @@ pipeline {
             echo "Searching Coverage Reports"
             echo "======================================"
 
-            find . -type f \\(
-
+            find . -type f \
+            \\( \
                 -name "lcov.info" -o \
                 -name "coverage.xml" -o \
                 -name "jacoco.xml" -o \
                 -name "*.exec" -o \
-                -name "coverage.out"
-
+                -name "coverage.out" \
             \\) || true
-
             '''
 
         }
