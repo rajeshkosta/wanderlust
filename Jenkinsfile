@@ -998,6 +998,8 @@ reports/**/*,
 
         echo "Pipeline Failed"
 
-    } //
+    }
 
-} //
+} // End post
+
+} // End pipeline
