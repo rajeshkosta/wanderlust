@@ -884,7 +884,7 @@ pipeline {
 
                 sh '''
 
-                NEXUS_URL=localhost:32770
+                NEXUS_URL=localhost:8083
 
                 echo "$NEXUS_PASS" | docker login -u "$NEXUS_USER"    --password-stdin $NEXUS_URL
 
