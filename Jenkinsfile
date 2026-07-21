@@ -635,64 +635,161 @@ pipeline {
     }
 
     /**********************************************************************
-     * APPLICATION BUILD
-     **********************************************************************/
+ * APPLICATION BUILD
+ **********************************************************************/
     stage('Build') {
-
+    
         steps {
-
+    
             script {
-
+    
                 /**********************
                  * BACKEND BUILD
                  **********************/
                 if (env.HAS_BACKEND == "true") {
-
+    
                     dir('Application-Code/backend') {
-
+    
                         switch(env.APP_LANG) {
-
+    
                             case "java":
-
+    
                                 sh '''
                                 echo "Building Java Application..."
+    
                                 mvn clean package -DskipTests
+    
+                                mkdir -p ../../artifacts/backend
+    
+                                cp target/*.jar ../../artifacts/backend/ 2>/dev/null || true
+                                cp target/*.war ../../artifacts/backend/ 2>/dev/null || true
                                 '''
-
+    
                                 break
-
+    
                             case "nodejs":
-
+    
                                 sh '''
                                 echo "Building NodeJS Application..."
-                                npm run build
+    
+                                if node -e "process.exit(require('./package.json').scripts?.build ? 0 : 1)"
+                                then
+                                    npm run build
+                                else
+                                    echo "No build script found. Skipping build."
+                                fi
+    
+                                mkdir -p ../../artifacts/backend
+    
+                                tar --exclude=node_modules \
+                                    --exclude=.git \
+                                    -czf ../../artifacts/backend/backend-${BUILD_NUMBER}.tar.gz .
                                 '''
-
+    
                                 break
-
+    
                             case "python":
-
+    
                                 sh '''
-                                echo "Python application detected."
-                                echo "No build step required."
+                                echo "Packaging Python Application..."
+    
+                                mkdir -p ../../artifacts/backend
+    
+                                tar --exclude=venv \
+                                    --exclude=__pycache__ \
+                                    --exclude=.git \
+                                    -czf ../../artifacts/backend/backend-${BUILD_NUMBER}.tar.gz .
                                 '''
-
+    
                                 break
-
+    
                             case "golang":
-
+    
                                 sh '''
                                 echo "Building Go Application..."
-                                go build ./...
+    
+                                go build -o app .
+    
+                                mkdir -p ../../artifacts/backend
+    
+                                cp app ../../artifacts/backend/
                                 '''
-
+    
                                 break
-
+    
                         }
-
+    
                     }
+    
+                }
+
+            /**********************
+             * FRONTEND BUILD
+             **********************/
+            if (env.HAS_FRONTEND == "true") {
+
+                dir('Application-Code/frontend') {
+
+                    sh '''
+                    export NODE_OPTIONS=--openssl-legacy-provider
+
+                    npm run build
+
+                    mkdir -p ../../artifacts/frontend
+
+                    if [ -d dist ]; then
+                        cp -r dist ../../artifacts/frontend/
+                    fi
+
+                    if [ -d build ]; then
+                        cp -r build ../../artifacts/frontend/
+                    fi
+                    '''
 
                 }
+
+            }
+
+            /**********************
+             * ADMIN BUILD
+             **********************/
+            if (env.HAS_ADMIN == "true") {
+
+                dir('Application-Code/admin') {
+
+                    sh '''
+                    export NODE_OPTIONS=--openssl-legacy-provider
+
+                    npm run build
+
+                    mkdir -p ../../artifacts/admin
+
+                    if [ -d dist ]; then
+                        cp -r dist ../../artifacts/admin/
+                    fi
+
+                    if [ -d build ]; then
+                        cp -r build ../../artifacts/admin/
+                    fi
+                    '''
+
+                }
+
+            }
+
+            sh '''
+            echo "=============================="
+            echo "Generated Artifacts"
+            echo "=============================="
+
+            find artifacts -type f || true
+            '''
+
+        }
+
+    }
+
+}
 
                 /**********************
                  * FRONTEND BUILD
@@ -950,6 +1047,7 @@ post {
         archiveArtifacts(
 
             artifacts: '''
+artifacts/**/*,
 reports/**/*,
 **/coverage/**/*,
 **/lcov.info,
@@ -958,7 +1056,7 @@ reports/**/*,
 **/*.exec,
 **/coverage.out,
 **/target/*.jar,
-**/target/surefire-reports/**/*,
+**/target/*.war,
 **/dist/**/*,
 **/build/**/*,
 **/*.log
