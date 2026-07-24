@@ -958,83 +958,124 @@ pipeline {
 
     }
 
-    /**********************************************************************
-     * PUSH IMAGE TO NEXUS
-     **********************************************************************/
-    stage('Push Image') {
+    stage('Build & Push Docker Images to DockerHub') {
 
         steps {
-
+    
             withCredentials([
-
                 usernamePassword(
-
-                    credentialsId: 'nexus-docker-cred',
-
-                    usernameVariable: 'NEXUS_USER',
-
-                    passwordVariable: 'NEXUS_PASS'
-
+                    credentialsId: 'dockerhub-cred',
+                    usernameVariable: 'DOCKER_USER',
+                    passwordVariable: 'DOCKER_PASS'
                 )
-
             ]) {
-
+    
                 sh '''
-
-                NEXUS_URL=localhost:8083
-
-                echo "$NEXUS_PASS" | docker login -u "$NEXUS_USER"    --password-stdin $NEXUS_URL
-
-                ###################################################
+    
+                echo "Logging into Docker Hub..."
+    
+                echo $DOCKER_PASS | docker login \
+                -u $DOCKER_USER \
+                --password-stdin
+    
+    
+                FRONTEND_REPO=$DOCKER_USER/${PROJECT_NAME}-frontend
+                BACKEND_REPO=$DOCKER_USER/${PROJECT_NAME}-backend
+                ADMIN_REPO=$DOCKER_USER/${PROJECT_NAME}-admin
+    
+    
+                echo "Docker Hub repositories are ready."
+    
+    
+                #################################
                 # FRONTEND
-                ###################################################
-
-                if docker image inspect frontend:${TAG} >/dev/null 2>&1
-                then
-
-                    docker tag frontend:${TAG}  $NEXUS_URL/${PROJECT_NAME}-frontend:${TAG}
-
-                    docker push $NEXUS_URL/${PROJECT_NAME}-frontend:${TAG}
-
+                #################################
+    
+                if docker image inspect frontend:${TAG} >/dev/null 2>&1; then
+    
+                    docker tag frontend:${TAG} $FRONTEND_REPO:${TAG}
+                    docker tag frontend:${TAG} $FRONTEND_REPO:latest
+    
+    
+                    docker push $FRONTEND_REPO:${TAG}
+                    docker push $FRONTEND_REPO:latest
+    
                 fi
-
-                ###################################################
+    
+    
+    
+                #################################
                 # BACKEND
-                ###################################################
-
-                if docker image inspect backend:${TAG} >/dev/null 2>&1
-                then
-
-                    docker tag backend:${TAG} $NEXUS_URL/${PROJECT_NAME}-backend:${TAG}
-
-                    docker push $NEXUS_URL/${PROJECT_NAME}-backend:${TAG}
-
+                #################################
+    
+                if docker image inspect backend:${TAG} >/dev/null 2>&1; then
+    
+                    docker tag backend:${TAG} $BACKEND_REPO:${TAG}
+                    docker tag backend:${TAG} $BACKEND_REPO:latest
+    
+    
+                    docker push $BACKEND_REPO:${TAG}
+                    docker push $BACKEND_REPO:latest
+    
                 fi
-
-                ###################################################
+    
+    
+    
+                #################################
                 # ADMIN
-                ###################################################
-
-                if docker image inspect admin:${TAG} >/dev/null 2>&1
-                then
-
-                    docker tag admin:${TAG} $NEXUS_URL/${PROJECT_NAME}-admin:${TAG}
-
-                    docker push $NEXUS_URL/${PROJECT_NAME}-admin:${TAG}
-
+                #################################
+    
+                if docker image inspect admin:${TAG} >/dev/null 2>&1; then
+    
+                    docker tag admin:${TAG} $ADMIN_REPO:${TAG}
+                    docker tag admin:${TAG} $ADMIN_REPO:latest
+    
+    
+                    docker push $ADMIN_REPO:${TAG}
+                    docker push $ADMIN_REPO:latest
+    
                 fi
-
-                docker logout $NEXUS_URL
-
+    
+    
+    
+                #################################
+                # CLEANUP
+                #################################
+    
+                echo "Cleaning Docker Images..."
+    
+    
+                # Remove local images
+    
+                docker rmi frontend:${TAG} || true
+                docker rmi backend:${TAG} || true
+                docker rmi admin:${TAG} || true
+    
+    
+    
+                # Remove DockerHub tagged images
+    
+                docker rmi $FRONTEND_REPO:${TAG} || true
+                docker rmi $FRONTEND_REPO:latest || true
+    
+                docker rmi $BACKEND_REPO:${TAG} || true
+                docker rmi $BACKEND_REPO:latest || true
+    
+                docker rmi $ADMIN_REPO:${TAG} || true
+                docker rmi $ADMIN_REPO:latest || true
+    
+    
+    
+                # Remove dangling images
+    
+                docker logout || true
+    
+                echo "Docker Hub Push Completed Successfully"
+    
                 '''
-
             }
-
         }
-
     }
-
-} // End stages
 
 
 /***************************************************************
