@@ -39,7 +39,7 @@ frontend:
   ingress:
     enabled: true
     className: nginx
-    host: wanderlust.local
+    host: stage.wanderlust.local
 
   resources:
     requests:
