@@ -2,8 +2,8 @@ frontend:
   replicaCount: 1
 
   image:
-    repository: rajeshkosta/wanderlust-frontend
-    tag: "latest"
+    repository: localhost:8083/wanderlust-frontend
+    tag: "11"
     pullPolicy: Always
 
   imagePullSecrets: []
@@ -84,8 +84,8 @@ backend:
   replicaCount: 1
 
   image:
-    repository: rajeshkosta/wanderlust-backend
-    tag: "latest"
+    repository: localhost:8083/wanderlust-backend
+    tag: "11"
     pullPolicy: Always
 
   imagePullSecrets: []
