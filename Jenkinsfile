@@ -1064,8 +1064,6 @@ pipeline {
                 docker rmi $ADMIN_REPO:${TAG} || true
                 docker rmi $ADMIN_REPO:latest || true
     
-    
-    
                 # Remove dangling images
     
                 docker logout || true
@@ -1076,6 +1074,7 @@ pipeline {
             }
         }
     }
+}
 
 
 /***************************************************************
