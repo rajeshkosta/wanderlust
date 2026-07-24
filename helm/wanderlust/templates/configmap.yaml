@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: ConfigMap
+
+metadata:
+  name: frontend-config
+
+data:
+  VITE_API_PATH: {{ .Values.frontend.config.VITE_API_PATH | quote }}
+  NODE_ENV: {{ .Values.frontend.config.NODE_ENV | quote }}
