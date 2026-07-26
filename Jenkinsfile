@@ -957,7 +957,7 @@ pipeline {
         }
 
     }
-
+    
     stage('Build & Push Docker Images to DockerHub') {
 
         steps {
@@ -974,15 +974,11 @@ pipeline {
     
                 echo "Logging into Docker Hub..."
     
-                echo $DOCKER_PASS | docker login \
-                -u $DOCKER_USER \
-                --password-stdin
-    
+                echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin
     
                 FRONTEND_REPO=$DOCKER_USER/${PROJECT_NAME}-frontend
                 BACKEND_REPO=$DOCKER_USER/${PROJECT_NAME}-backend
                 ADMIN_REPO=$DOCKER_USER/${PROJECT_NAME}-admin
-    
     
                 echo "Docker Hub repositories are ready."
     
@@ -1076,6 +1072,54 @@ pipeline {
     }
 }
 
+  //  Checkout GitOps Repository
+
+    stage('Checkout GitOps Repo') {
+        steps {
+            dir('gitops') {
+                git(
+                    branch: 'main',
+                    credentialsId: 'github-cred',
+                    url: 'https://github.com/<YOUR_USERNAME>/<GITOPS_REPO>.git'
+                )
+            }
+        }
+    }
+
+// Dev Deployment
+    stage('Update Dev Image Tag') {
+        steps {
+            dir('gitops') {
+                sh """
+                sed -i '/frontend:/,/backend:/ s/tag:.*/tag: "${TAG}"/' helm/wanderlust/values-dev.yaml
+                sed -i '/backend:/,$ s/tag:.*/tag: "${TAG}"/' helm/wanderlust/values-dev.yaml
+    
+                git config user.name "Jenkins"
+                git config user.email "jenkins@company.com"
+    
+                git add .
+    
+                git commit -m "Deploy build ${TAG}" || true
+    
+                git push origin main
+                """
+            }
+        }
+    }
+
+// Stage Deployment
+    stage('Approve Stage') {
+        steps {
+            input message: 'Deploy to Stage?'
+        }
+    }
+// Production Deployment
+    
+    stage('Approve Production') {
+        steps {
+            input message: 'Deploy to Production?'
+        }
+    }
 
 /***************************************************************
  * POST ACTIONS
