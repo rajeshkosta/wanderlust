@@ -656,6 +656,7 @@ pipeline {
     }
 }
 
+//
 //CHECKOUT GITOPS REPOSITORY
     stage('Checkout GitOps Repo') {
         steps {
@@ -741,7 +742,7 @@ pipeline {
             }
         }
     }
-
+}
 /***************************************************************
  * POST ACTIONS
  ***************************************************************/
