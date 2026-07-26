@@ -655,7 +655,20 @@ pipeline {
 //         }
 //     }
 
-
+   stage('Debug GitOps Repo') {
+       steps {
+           dir('gitops') {
+               sh '''
+               pwd
+               echo "=========="
+               ls -R
+               echo "=========="
+               find . -name "values-dev.yaml"
+               '''
+           }
+       } 
+   }
+        
 // CHECKOUT GITOPS REPOSITORY
     stage('Checkout GitOps Repo') {
         steps {
