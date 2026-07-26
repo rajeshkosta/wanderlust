@@ -655,67 +655,52 @@ pipeline {
 //         }
 //     }
 
-   stage('Debug GitOps Repo') {
-       steps {
-           dir('gitops') {
-               sh '''
-               pwd
-               echo "=========="
-               ls -R
-               echo "=========="
-               find . -name "values-dev.yaml"
-               git remote -v
-               '''
-           }
-       } 
-   }
-        
-// CHECKOUT GITOPS REPOSITORY
-    stage('Checkout GitOps Repo') {
+   // DEBUG GITOPS REPO
+    stage('Debug GitOps Repo') {
         steps {
             dir('gitops') {
-                git(
-                    branch: 'main',
-                    credentialsId: 'github-creds',
-                    url: 'https://github.com/rajeshkosta/wanderlust/gitops.git'
-                )
+                sh '''
+                pwd
+                echo "=========="
+                ls -R
+                echo "=========="
+                find . -name "values-dev.yaml"
+                git remote -v
+                '''
             }
         }
     }
     
-// UPDATE DEV IMAGE TAG
+    // UPDATE DEV IMAGE TAG
     stage('Update GitOps Manifest') {
         steps {
             dir('gitops') {
-        
-                sh '''
-                yq -i '.frontend.image.tag = "28"' wanderlust/values-dev.yaml
-                yq -i '.backend.image.tag = "28"' wanderlust/values-dev.yaml
-        
-                git config user.name "rajeshkosta"
-                git config user.email "rajesh.kosta8982@yahoo.com"
-        
-                git add wanderlust/values-dev.yaml
-                git commit -m "Deploy build 28 to Dev"
-                '''
-        
                 withCredentials([
-                  usernamePassword(
-                    credentialsId: 'github-creds',
-                    usernameVariable: 'GIT_USERNAME',
-                    passwordVariable: 'GIT_PASSWORD'
-                  )
+                    usernamePassword(
+                        credentialsId: 'github-creds',
+                        usernameVariable: 'GIT_USERNAME',
+                        passwordVariable: 'GIT_PASSWORD'
+                    )
                 ]) {
-        
-                    sh '''
-                    git push https://${GIT_USERNAME}:${GIT_PASSWORD}@github.com/rajeshkosta/wanderlust.git main
-                    '''
+                    sh """
+                    yq -i '.frontend.image.tag = "${TAG}"' wanderlust/values-dev.yaml
+                    yq -i '.backend.image.tag = "${TAG}"' wanderlust/values-dev.yaml
+    
+                    git config user.name "rajeshkosta"
+                    git config user.email "rajesh.kosta8982@yahoo.com"
+    
+                    git add wanderlust/values-dev.yaml
+                    git commit -m "Deploy build ${TAG} to Dev" || true
+    
+                    git remote set-url origin https://${GIT_USERNAME}:${GIT_PASSWORD}@github.com/rajeshkosta/wanderlust.git
+                    git push origin main
+                    """
                 }
             }
         }
     }
     
-// APPROVE STAGE DEPLOYMENT
+    // APPROVE STAGE DEPLOYMENT
     stage('Approve Stage') {
         steps {
             input(
@@ -725,23 +710,33 @@ pipeline {
         }
     }
     
-// UPDATE STAGE IMAGE TAG
-      stage('Update Stage Image Tag') {
+    // UPDATE STAGE IMAGE TAG
+    stage('Update Stage Image Tag') {
         steps {
             dir('gitops') {
-                sh """
-                    yq -i '.frontend.image.tag = "${TAG}"' gitops/wanderlust/values-stage.yaml
-                    yq -i '.backend.image.tag = "${TAG}"' gitops/wanderlust/values-stage.yaml
-                    
-                    git add gitops/wanderlust/values-stage.yaml
+                withCredentials([
+                    usernamePassword(
+                        credentialsId: 'github-creds',
+                        usernameVariable: 'GIT_USERNAME',
+                        passwordVariable: 'GIT_PASSWORD'
+                    )
+                ]) {
+                    sh """
+                    yq -i '.frontend.image.tag = "${TAG}"' wanderlust/values-stage.yaml
+                    yq -i '.backend.image.tag = "${TAG}"' wanderlust/values-stage.yaml
+    
+                    git add wanderlust/values-stage.yaml
                     git commit -m "Deploy build ${TAG} to Stage" || true
+    
+                    git remote set-url origin https://${GIT_USERNAME}:${GIT_PASSWORD}@github.com/rajeshkosta/wanderlust.git
                     git push origin main
-                """
+                    """
+                }
             }
         }
     }
     
-//  APPROVE PRODUCTION DEPLOYMENT
+    // APPROVE PRODUCTION DEPLOYMENT
     stage('Approve Production') {
         steps {
             input(
@@ -751,24 +746,31 @@ pipeline {
         }
     }
     
-    /**********************************************************************
-     * UPDATE PRODUCTION IMAGE TAG
-     **********************************************************************/
+    // UPDATE PRODUCTION IMAGE TAG
     stage('Update Production Image Tag') {
         steps {
             dir('gitops') {
-                sh """
-                    yq -i '.frontend.image.tag = "${TAG}"' gitops/wanderlust/values-prod.yaml
-                    yq -i '.backend.image.tag = "${TAG}"' gitops/wanderlust/values-prod.yaml
+                withCredentials([
+                    usernamePassword(
+                        credentialsId: 'github-creds',
+                        usernameVariable: 'GIT_USERNAME',
+                        passwordVariable: 'GIT_PASSWORD'
+                    )
+                ]) {
+                    sh """
+                    yq -i '.frontend.image.tag = "${TAG}"' wanderlust/values-prod.yaml
+                    yq -i '.backend.image.tag = "${TAG}"' wanderlust/values-prod.yaml
     
-                    git add gitops/wanderlust/values-prod.yaml 
+                    git add wanderlust/values-prod.yaml
                     git commit -m "Deploy build ${TAG} to Production" || true
+    
+                    git remote set-url origin https://${GIT_USERNAME}:${GIT_PASSWORD}@github.com/rajeshkosta/wanderlust.git
                     git push origin main
-                """
+                    """
+                }
             }
         }
     }
-}
 /***************************************************************
  * POST ACTIONS
  ***************************************************************/
