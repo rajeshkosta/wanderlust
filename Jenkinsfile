@@ -667,13 +667,8 @@ pipeline {
                     )
                 ]) {
                     sh """
-                    echo "===== DEBUG ====="
-                    pwd
-                    git status
-                    git branch -a
-                    git rev-parse --abbrev-ref HEAD
-                    git remote -v
-                    echo "================="
+                    git fetch origin
+                    git checkout -B main origin/main
                     
                     yq -i '.frontend.image.tag = "${TAG}"' wanderlust/values-dev.yaml
                     yq -i '.backend.image.tag = "${TAG}"' wanderlust/values-dev.yaml
