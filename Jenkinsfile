@@ -591,7 +591,7 @@ pipeline {
     }
 
 //  Build & Push Docker Images to DockerHub
-        
+            
     stage('Build & Push Docker Images to DockerHub') {
         steps {
             withCredentials([
@@ -655,6 +655,92 @@ pipeline {
         }
     }
 }
+
+//CHECKOUT GITOPS REPOSITORY
+    stage('Checkout GitOps Repo') {
+        steps {
+            dir('gitops') {
+                git(
+                    branch: 'main',
+                    credentialsId: 'github-cred',
+                    url: 'https://github.com/rajeshkosta/wanderlust.git'
+                )
+            }
+        }
+    }
+    
+// UPDATE DEV IMAGE TAG
+    stage('Update Dev Image Tag') {
+        steps {
+            dir('gitops') {
+                sh """
+                    yq -i '.frontend.image.tag = "${TAG}"' gitops/wanderlust/values-dev.yaml
+                    yq -i '.backend.image.tag = "${TAG}"' gitops/wanderlust/values-dev.yaml
+    
+                    git config user.name "Jenkins"
+                    git config user.email "jenkins@company.com"
+    
+                    git add helm/wanderlust/values-dev.yaml
+                    git commit -m "Deploy build ${TAG} to Dev" || true
+                    git push origin main
+                """
+            }
+        }
+    }
+    
+// APPROVE STAGE DEPLOYMENT
+    stage('Approve Stage') {
+        steps {
+            input(
+                message: "Deploy Build ${TAG} to Stage?",
+                ok: "Deploy"
+            )
+        }
+    }
+    
+// UPDATE STAGE IMAGE TAG
+      stage('Update Stage Image Tag') {
+        steps {
+            dir('gitops') {
+                sh """
+                    yq -i '.frontend.image.tag = "${TAG}"' gitops/wanderlust/values-stage.yaml
+                    yq -i '.backend.image.tag = "${TAG}"' gitops/wanderlust/values-stage.yaml
+                    
+                    git add gitops/wanderlust/values-stage.yaml
+                    git commit -m "Deploy build ${TAG} to Stage" || true
+                    git push origin main
+                """
+            }
+        }
+    }
+    
+//  APPROVE PRODUCTION DEPLOYMENT
+    stage('Approve Production') {
+        steps {
+            input(
+                message: "Deploy Build ${TAG} to Production?",
+                ok: "Deploy"
+            )
+        }
+    }
+    
+    /**********************************************************************
+     * UPDATE PRODUCTION IMAGE TAG
+     **********************************************************************/
+    stage('Update Production Image Tag') {
+        steps {
+            dir('gitops') {
+                sh """
+                    yq -i '.frontend.image.tag = "${TAG}"' gitops/wanderlust/values-prod.yaml
+                    yq -i '.backend.image.tag = "${TAG}"' gitops/wanderlust/values-prod.yaml
+    
+                    git add gitops/wanderlust/values-prod.yaml 
+                    git commit -m "Deploy build ${TAG} to Production" || true
+                    git push origin main
+                """
+            }
+        }
+    }
 
 /***************************************************************
  * POST ACTIONS
