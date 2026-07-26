@@ -664,6 +664,7 @@ pipeline {
                ls -R
                echo "=========="
                find . -name "values-dev.yaml"
+               git remote -v
                '''
            }
        } 
@@ -676,7 +677,7 @@ pipeline {
                 git(
                     branch: 'main',
                     credentialsId: 'github-creds',
-                    url: 'https://github.com/rajeshkosta/wanderlust.git'
+                    url: 'https://github.com/rajeshkosta/wanderlust/gitops.git'
                 )
             }
         }
