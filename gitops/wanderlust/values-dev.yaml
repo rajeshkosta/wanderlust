@@ -2,7 +2,7 @@ frontend:
   replicaCount: 1
   image:
     repository: rajeshkosta/wanderlust-frontend
-    tag: "35"
+    tag: "36"
     pullPolicy: Always
   imagePullSecrets: []
   nameOverride: ""
@@ -63,7 +63,7 @@ backend:
   replicaCount: 1
   image:
     repository: rajeshkosta/wanderlust-backend
-    tag: "35"
+    tag: "36"
     pullPolicy: Always
   imagePullSecrets: []
   nameOverride: ""
