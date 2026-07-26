@@ -1091,8 +1091,8 @@ pipeline {
         steps {
             dir('gitops') {
                 sh """
-                sed -i '/frontend:/,/backend:/ s/tag:.*/tag: "${TAG}"/' helm/wanderlust/values-dev.yaml
-                sed -i '/backend:/,$ s/tag:.*/tag: "${TAG}"/' helm/wanderlust/values-dev.yaml
+                yq -i '.frontend.image.tag = "${TAG}"' helm/wanderlust/values-dev.yaml
+                yq -i '.backend.image.tag = "${TAG}"' helm/wanderlust/values-dev.yaml
     
                 git config user.name "Jenkins"
                 git config user.email "jenkins@company.com"
