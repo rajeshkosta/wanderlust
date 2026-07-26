@@ -683,20 +683,31 @@ pipeline {
     }
     
 // UPDATE DEV IMAGE TAG
-    stage('Update Dev Image Tag') {
-        steps {
-            dir('gitops') {
-                sh """
-                    yq -i '.frontend.image.tag = "${TAG}"' gitops/wanderlust/values-dev.yaml
-                    yq -i '.backend.image.tag = "${TAG}"' gitops/wanderlust/values-dev.yaml
+    stage('Update GitOps Manifest') {
+        dir('gitops') {
     
-                    git config user.name "rajeshkosta"
-                    git config user.email "rajesh.kosta8982@yahoo.com"
+            sh '''
+            yq -i '.frontend.image.tag = "28"' wanderlust/values-dev.yaml
+            yq -i '.backend.image.tag = "28"' wanderlust/values-dev.yaml
     
-                    git add gitops/wanderlust/values-dev.yaml
-                    git commit -m "Deploy build ${TAG} to Dev" || true
-                    git push origin main
-                """
+            git config user.name "rajeshkosta"
+            git config user.email "rajesh.kosta8982@yahoo.com"
+    
+            git add wanderlust/values-dev.yaml
+            git commit -m "Deploy build 28 to Dev"
+            '''
+    
+            withCredentials([
+              usernamePassword(
+                credentialsId: 'github-creds',
+                usernameVariable: 'GIT_USERNAME',
+                passwordVariable: 'GIT_PASSWORD'
+              )
+            ]) {
+    
+                sh '''
+                git push https://${GIT_USERNAME}:${GIT_PASSWORD}@github.com/rajeshkosta/wanderlust.git main
+                '''
             }
         }
     }
