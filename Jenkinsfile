@@ -676,7 +676,7 @@ pipeline {
                 git(
                     branch: 'main',
                     credentialsId: 'github-creds',
-                    url: 'https://github.com/rajeshkosta/wanderlust/gitops.git'
+                    url: 'https://github.com/rajeshkosta/wanderlust.git'
                 )
             }
         }
@@ -687,13 +687,13 @@ pipeline {
         steps {
             dir('gitops') {
                 sh """
-                    yq -i '.frontend.image.tag = "${TAG}"' wanderlust/values-dev.yaml
-                    yq -i '.backend.image.tag = "${TAG}"' wanderlust/values-dev.yaml
+                    yq -i '.frontend.image.tag = "${TAG}"' gitops/wanderlust/values-dev.yaml
+                    yq -i '.backend.image.tag = "${TAG}"' gitops/wanderlust/values-dev.yaml
     
                     git config user.name "Jenkins"
                     git config user.email "jenkins@company.com"
     
-                    git add wanderlust/values-dev.yaml
+                    git add gitops/wanderlust/values-dev.yaml
                     git commit -m "Deploy build ${TAG} to Dev" || true
                     git push origin main
                 """
@@ -716,10 +716,10 @@ pipeline {
         steps {
             dir('gitops') {
                 sh """
-                    yq -i '.frontend.image.tag = "${TAG}"' wanderlust/values-stage.yaml
-                    yq -i '.backend.image.tag = "${TAG}"' wanderlust/values-stage.yaml
+                    yq -i '.frontend.image.tag = "${TAG}"' gitops/wanderlust/values-stage.yaml
+                    yq -i '.backend.image.tag = "${TAG}"' gitops/wanderlust/values-stage.yaml
                     
-                    git add wanderlust/values-stage.yaml
+                    git add gitops/wanderlust/values-stage.yaml
                     git commit -m "Deploy build ${TAG} to Stage" || true
                     git push origin main
                 """
@@ -744,10 +744,10 @@ pipeline {
         steps {
             dir('gitops') {
                 sh """
-                    yq -i '.frontend.image.tag = "${TAG}"' wanderlust/values-prod.yaml
-                    yq -i '.backend.image.tag = "${TAG}"' wanderlust/values-prod.yaml
+                    yq -i '.frontend.image.tag = "${TAG}"' gitops/wanderlust/values-prod.yaml
+                    yq -i '.backend.image.tag = "${TAG}"' gitops/wanderlust/values-prod.yaml
     
-                    git add wanderlust/values-prod.yaml 
+                    git add gitops/wanderlust/values-prod.yaml 
                     git commit -m "Deploy build ${TAG} to Production" || true
                     git push origin main
                 """
