@@ -655,6 +655,45 @@ pipeline {
         }
     }
 
+    // stage('Push Docker Images to Nexus') {
+
+    //     steps {
+    
+    //         withCredentials([
+    //             usernamePassword(
+    //                 credentialsId: 'nexus-docker-cred',
+    //                 usernameVariable: 'NEXUS_USER',
+    //                 passwordVariable: 'NEXUS_PASS'
+    //             )
+    //         ]) {
+    
+    //             sh '''
+    
+    //             NEXUS_URL=localhost:32770
+    
+    //             FRONTEND_REPO=$NEXUS_URL/${PROJECT_NAME}-frontend
+    //             BACKEND_REPO=$NEXUS_URL/${PROJECT_NAME}-backend
+    //             ADMIN_REPO=$NEXUS_URL/${PROJECT_NAME}-admin
+    
+    //             echo "$NEXUS_PASS" | docker login -u "$NEXUS_USER" --password-stdin $NEXUS_URL
+    
+    //             docker tag frontend:${TAG} $FRONTEND_REPO:${TAG}
+    //             docker push $FRONTEND_REPO:${TAG}
+    
+    //             docker tag backend:${TAG} $BACKEND_REPO:${TAG}
+    //             docker push $BACKEND_REPO:${TAG}
+    
+    //             docker tag admin:${TAG} $ADMIN_REPO:${TAG}
+    //             docker push $ADMIN_REPO:${TAG}
+    
+    //             docker logout $NEXUS_URL
+    
+    //             '''
+    //         }
+    //     }
+    // }
+
+        
     // stage('Build & Push Docker Images to ECR') {
 
     //     steps {
