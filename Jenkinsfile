@@ -906,35 +906,19 @@ reports/**/*,
 **/.npm/**,
 **/.cache/**
 ''',
-
             fingerprint: true,
-
             allowEmptyArchive: true
-
         )
-
         cleanWs notFailBuild: true
-
     }
-
     success {
-
         echo "Pipeline Completed Successfully"
-
     }
-
     unstable {
-
         echo "Pipeline Completed with Security Findings"
-
     }
-
     failure {
-
         echo "Pipeline Failed"
-
     }
-
 } // End post
-
 } // End pipeline
