@@ -656,7 +656,7 @@ pipeline {
     }
 }
 
-//CHECKOUT GITOPS REPOSITORY
+// CHECKOUT GITOPS REPOSITORY
     stage('Checkout GitOps Repo') {
         steps {
             dir('gitops') {
