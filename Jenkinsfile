@@ -674,13 +674,13 @@ pipeline {
         steps {
             dir('gitops') {
                 sh """
-                    yq -i '.frontend.image.tag = "${TAG}"' gitops/wanderlust/values-dev.yaml
-                    yq -i '.backend.image.tag = "${TAG}"' gitops/wanderlust/values-dev.yaml
+                    yq -i '.frontend.image.tag = "${TAG}"' wanderlust/values-dev.yaml
+                    yq -i '.backend.image.tag = "${TAG}"' wanderlust/values-dev.yaml
     
                     git config user.name "Jenkins"
                     git config user.email "jenkins@company.com"
     
-                    git add helm/wanderlust/values-dev.yaml
+                    git add wanderlust/values-dev.yaml
                     git commit -m "Deploy build ${TAG} to Dev" || true
                     git push origin main
                 """
