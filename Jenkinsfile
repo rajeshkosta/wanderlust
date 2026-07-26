@@ -690,8 +690,8 @@ pipeline {
                     yq -i '.frontend.image.tag = "${TAG}"' gitops/wanderlust/values-dev.yaml
                     yq -i '.backend.image.tag = "${TAG}"' gitops/wanderlust/values-dev.yaml
     
-                    git config user.name "Jenkins"
-                    git config user.email "jenkins@company.com"
+                    git config user.name "rajeshkosta"
+                    git config user.email "rajesh.kosta8982@yahoo.com"
     
                     git add gitops/wanderlust/values-dev.yaml
                     git commit -m "Deploy build ${TAG} to Dev" || true
