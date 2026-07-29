@@ -3,13 +3,20 @@ kind: Deployment
 
 metadata:
   name: backend
+
   labels:
     app: backend
 
 spec:
-  {{- if not .Values.backend.autoscaling.enabled }}
   replicas: {{ .Values.backend.replicaCount }}
-  {{- end }}
+
+  revisionHistoryLimit: {{ .Values.revisionHistoryLimit }}
+
+  strategy:
+    type: {{ .Values.strategy.type }}
+    rollingUpdate:
+      maxUnavailable: {{ .Values.strategy.rollingUpdate.maxUnavailable }}
+      maxSurge: {{ .Values.strategy.rollingUpdate.maxSurge }}
 
   selector:
     matchLabels:
@@ -20,70 +27,82 @@ spec:
       labels:
         app: backend
 
+        {{- with .Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+
     spec:
 
-      {{- with .Values.backend.imagePullSecrets }}
+      serviceAccountName: {{ .Values.backend.serviceAccount.name }}
+
+      automountServiceAccountToken: {{ .Values.backend.serviceAccount.automount }}
+
+      terminationGracePeriodSeconds: {{ .Values.terminationGracePeriodSeconds }}
+
+      {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
 
-      serviceAccountName: {{ .Values.backend.serviceAccount.name }}
-
-      {{- with .Values.backend.podSecurityContext }}
       securityContext:
-        {{- toYaml . | nindent 8 }}
-      {{- end }}
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
 
       containers:
+        - name: backend
 
-      - name: backend
+          image: "{{ .Values.backend.image.repository }}:{{ .Values.backend.image.tag }}"
 
-        {{- with .Values.backend.securityContext }}
-        securityContext:
-          {{- toYaml . | nindent 10 }}
-        {{- end }}
+          imagePullPolicy: {{ .Values.backend.image.pullPolicy }}
 
-        image: "{{ .Values.backend.image.repository }}:{{ .Values.backend.image.tag }}"
-        imagePullPolicy: {{ .Values.backend.image.pullPolicy }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
 
-        ports:
-        - containerPort: {{ .Values.backend.containerPort }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.backend.service.targetPort }}
+              protocol: TCP
 
-        envFrom:
-        - secretRef:
-            name: backend-secret
+          envFrom:
+            - configMapRef:
+                name: backend-config
+            - secretRef:
+                name: backend-secret
 
-        {{- with .Values.backend.startupProbe }}
-        startupProbe:
-          {{- toYaml . | nindent 10 }}
-        {{- end }}
+          resources:
+            {{- toYaml .Values.backend.resources | nindent 12 }}
 
-        {{- with .Values.backend.livenessProbe }}
-        livenessProbe:
-          {{- toYaml . | nindent 10 }}
-        {{- end }}
+          livenessProbe:
+            {{- toYaml .Values.backend.livenessProbe | nindent 12 }}
 
-        {{- with .Values.backend.readinessProbe }}
-        readinessProbe:
-          {{- toYaml . | nindent 10 }}
-        {{- end }}
+          readinessProbe:
+            {{- toYaml .Values.backend.readinessProbe | nindent 12 }}
 
-        {{- with .Values.backend.resources }}
-        resources:
-          {{- toYaml . | nindent 10 }}
-        {{- end }}
+          {{- with .Values.volumeMounts }}
+          volumeMounts:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
 
-        {{- with .Values.backend.volumeMounts }}
-        volumeMounts:
-          {{- toYaml . | nindent 10 }}
-        {{- end }}
-
-      {{- with .Values.backend.volumes }}
+      {{- with .Values.volumes }}
       volumes:
         {{- toYaml . | nindent 8 }}
       {{- end }}
 
-      {{- with .Values.backend.tolerations }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+
+      {{- with .Values.tolerations }}
       tolerations:
         {{- toYaml . | nindent 8 }}
       {{- end }}

@@ -1,32 +1,53 @@
-{{- if .Values.frontend.ingress.enabled }}
+{{- if .Values.ingress.enabled }}
+
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 
 metadata:
-  name: wanderlust-ingress
+  name: nginx-ingress
+
+  {{- with .Values.ingress.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
 
 spec:
-  ingressClassName: {{ .Values.frontend.ingress.className }}
+
+  ingressClassName: {{ .Values.ingress.className }}
 
   rules:
-    - host: {{ .Values.frontend.ingress.host }}
+    - host: {{ .Values.ingress.host }}
+
       http:
         paths:
-          # Frontend
-          - path: /
-            pathType: Prefix
-            backend:
-              service:
-                name: {{ .Values.frontend.service.name }}
-                port:
-                  number: {{ .Values.frontend.service.port }}
 
-          # Backend API
-          - path: /api
+          - path: {{ .Values.ingress.paths.frontend.path }}
             pathType: Prefix
             backend:
               service:
-                name: {{ .Values.backend.service.name }}
+                name: {{ .Values.ingress.paths.frontend.service }}
                 port:
-                  number: {{ .Values.backend.service.port }}
+                  number: {{ .Values.ingress.paths.frontend.port }}
+
+          - path: {{ .Values.ingress.paths.backend.path }}
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ .Values.ingress.paths.backend.service }}
+                port:
+                  number: {{ .Values.ingress.paths.backend.port }}
+
+          - path: {{ .Values.ingress.paths.admin.path }}
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ .Values.ingress.paths.admin.service }}
+                port:
+                  number: {{ .Values.ingress.paths.admin.port }}
+
+{{- if .Values.ingress.tls }}
+  tls:
+    {{- toYaml .Values.ingress.tls | nindent 4 }}
+{{- end }}
+
 {{- end }}
