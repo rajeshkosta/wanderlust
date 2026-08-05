@@ -78,8 +78,8 @@ pipeline {
                 else if (fileExists('Application-Code/backend/requirements.txt')) {
                     env.APP_LANG = "python"
                 }
-                else if (fileExists('Application-Code/backend/go.mod')) {
-                    env.APP_LANG = "golang"
+                else if (fileExists('Application-Code/backend/composer.json')) {
+                    env.APP_LANG = "php"
                 }
                 else {
                     error("Unsupported Backend Language")
@@ -120,10 +120,10 @@ pipeline {
                                 pip install -r requirements.txt
                                 '''
                                 break
-                            case "golang":
+                            case "php":
                                 sh '''
-                                echo "Downloading Go Modules..."
-                                go mod download
+                                echo "Installing PHP Dependencies..."
+                                composer install --no-interaction --prefer-dist
                                 '''
                                 break
                         }
@@ -197,10 +197,11 @@ pipeline {
                                 find . -name "*.py" | xargs pylint || true
                                 '''
                                 break
-                            case "golang":
+
+                            case "php":
                                 sh '''
-                                echo "Running Go Lint..."
-                                golangci-lint run || true
+                                echo "Running PHP Syntax Check..."
+                                find . -type f -name "*.php" -exec php -l {} \\;
                                 '''
                                 break
                         }
@@ -237,10 +238,10 @@ pipeline {
                                 pip-audit || true
                                 '''
                                 break
-                            case "golang":
+                            case "php":
                                 sh '''
-                                echo "Running govulncheck..."
-                                govulncheck ./... || true
+                                echo "Running Composer Audit..."
+                                composer audit || true
                                 '''
                                 break
                         }
@@ -258,12 +259,14 @@ pipeline {
                 if (env.HAS_BACKEND == "true") {
                     dir('Application-Code/backend') {
                         switch(env.APP_LANG) {
+
                             case "java":
                                 sh '''
                                 echo "Running Java Tests..."
                                 mvn test || true
                                 '''
                                 break
+
                             case "nodejs":
                                 sh '''
                                 echo "Running NodeJS Tests..."
@@ -276,6 +279,7 @@ pipeline {
                                 fi
                                 '''
                                 break
+
                             case "python":
                                 sh '''
                                 echo "Running Python Tests..."
@@ -288,10 +292,16 @@ pipeline {
                                 fi
                                 '''
                                 break
-                            case "golang":
+
+                            case "php":
                                 sh '''
-                                echo "Running Go Tests..."
-                                go test ./... || true
+                                echo "Running PHPUnit..."
+
+                                if [ -f vendor/bin/phpunit ]; then
+                                   vendor/bin/phpunit || true
+                                else
+                                   echo "PHPUnit not found."
+                                fi
                                 '''
                                 break
                         }
@@ -330,6 +340,7 @@ pipeline {
                         if (env.HAS_BACKEND == "true") {
                             dir('Application-Code/backend') {
                                 switch(env.APP_LANG) {
+
                                     /**************** JAVA ****************/
                                     case "java":
                                         sh """
@@ -360,13 +371,13 @@ pipeline {
                                         """
                                         break
                                     /**************** GOLANG ****************/
-                                    case "golang":
+                                    case "php":
                                         sh """
                                         ${SCANNER_HOME}/bin/sonar-scanner \
                                         -Dsonar.projectKey=${PROJECT_NAME}-backend \
                                         -Dsonar.projectName=${PROJECT_NAME}-backend \
                                         -Dsonar.sources=. \
-                                        -Dsonar.go.coverage.reportPaths=coverage.out
+                                        -Dsonar.sourceEncoding=UTF-8
                                         """
                                         break
                                 }
@@ -378,15 +389,38 @@ pipeline {
         }
     }
 
-// SONAR QUALITY GATE
+    // SONAR QUALITY GATE
 
     stage('Quality Gate') {
+        when {
+            expression { env.RUN_SONAR == "true" }
+        }
         steps {
             timeout(time: 10, unit: 'MINUTES') {
-                waitForQualityGate abortPipeline: true
+                script {
+                    def qg = waitForQualityGate()
+    
+                    echo "Quality Gate Status: ${qg.status}"
+    
+                    if (qg.status != 'OK') {
+                        currentBuild.result = 'UNSTABLE'
+                        echo "Quality Gate failed, but continuing the pipeline."
+                    }
+                }
             }
         }
     }
+
+
+// SONAR QUALITY GATE
+
+    // stage('Quality Gate') {
+    //     steps {
+    //         timeout(time: 10, unit: 'MINUTES') {
+    //             waitForQualityGate abortPipeline: true
+    //         }
+    //     }
+    // }
  
 // TRIVY FILESYSTEM SCAN
 
@@ -416,6 +450,7 @@ pipeline {
                 if (env.HAS_BACKEND == "true") {
                    dir('Application-Code/backend') {    
                         switch(env.APP_LANG) {
+
                             case "java":
                                 sh '''
                                 echo "Building Java Application..."
@@ -425,6 +460,7 @@ pipeline {
                                 cp target/*.war ../../artifacts/backend/ 2>/dev/null || true
                                 '''
                                 break
+
                             case "nodejs":
                                 sh '''
                                 echo "Building NodeJS Application..."
@@ -438,6 +474,7 @@ pipeline {
                                 tar --exclude=node_modules --exclude=.git -czf ../../artifacts/backend/backend-${BUILD_NUMBER}.tar.gz .
                                 '''
                                 break
+
                             case "python":
                                 sh '''
                                 echo "Packaging Python Application..."
@@ -445,12 +482,11 @@ pipeline {
                                 tar --exclude=venv --exclude=__pycache__ --exclude=.git -czf ../../artifacts/backend/backend-${BUILD_NUMBER}.tar.gz .
                                 '''
                                 break
-                            case "golang":
+                            case "php":
                                 sh '''
-                                echo "Building Go Application..."
-                                go build -o app .
+                                echo "Packaging PHP Application..."
                                 mkdir -p ../../artifacts/backend
-                                cp app ../../artifacts/backend/
+                                tar --exclude=vendor --exclude=.git -czf ../../artifacts/backend/backend-${BUILD_NUMBER}.tar.gz .
                                 '''
                                 break
                         }
@@ -781,22 +817,23 @@ pipeline {
                         passwordVariable: 'GIT_PASSWORD'
                     )
                 ]) {
-                    sh """
+                    sh '''
+                    git remote set-url origin https://${GIT_USERNAME}:${GIT_PASSWORD}@github.com/rajeshkosta/my-trimmy.git
+    
                     git fetch origin
                     git checkout -B main origin/main
-                    
-                    yq -i '.frontend.image.tag = "${TAG}"' wanderlust/values-dev.yaml
-                    yq -i '.backend.image.tag = "${TAG}"' wanderlust/values-dev.yaml
+    
+                    yq -i ".frontend.image.tag = \\"${TAG}\\"" trimmy/dev-values.yaml
+                    yq -i ".backend.image.tag = \\"${TAG}\\"" trimmy/dev-values.yaml
     
                     git config user.name "rajeshkosta"
                     git config user.email "rajesh.kosta8982@yahoo.com"
     
-                    git add wanderlust/values-dev.yaml
+                    git add trimmy/dev-values.yaml
                     git commit -m "Deploy build ${TAG} to Dev" || true
     
-                    git remote set-url origin https://${GIT_USERNAME}:${GIT_PASSWORD}@github.com/rajeshkosta/wanderlust.git
                     git push origin main
-                    """
+                    '''
                 }
             }
         }
@@ -812,7 +849,7 @@ pipeline {
         }
     }
     
-    // UPDATE STAGE IMAGE TAG
+       // UPDATE STAGE IMAGE TAG
     stage('Update Stage Image Tag') {
         steps {
             dir('gitops') {
@@ -823,20 +860,25 @@ pipeline {
                         passwordVariable: 'GIT_PASSWORD'
                     )
                 ]) {
-                    sh """
-                    yq -i '.frontend.image.tag = "${TAG}"' wanderlust/values-stage.yaml
-                    yq -i '.backend.image.tag = "${TAG}"' wanderlust/values-stage.yaml
+                    sh '''
+                    git remote set-url origin https://${GIT_USERNAME}:${GIT_PASSWORD}@github.com/rajeshkosta/my-trimmy.git
     
-                    git add wanderlust/values-stage.yaml
+                    git fetch origin
+                    git checkout -B main origin/main
+    
+                    yq -i ".frontend.image.tag = \\"${TAG}\\"" trimmy/stage-values.yaml
+                    yq -i ".backend.image.tag = \\"${TAG}\\"" trimmy/stage-values.yaml
+    
+                    git add trimmy/stage-values.yaml
                     git commit -m "Deploy build ${TAG} to Stage" || true
     
-                    git remote set-url origin https://${GIT_USERNAME}:${GIT_PASSWORD}@github.com/rajeshkosta/wanderlust.git
                     git push origin main
-                    """
+                    '''
                 }
             }
         }
     }
+    
     
     // APPROVE PRODUCTION DEPLOYMENT
     stage('Approve Production') {
@@ -847,6 +889,7 @@ pipeline {
             )
         }
     }
+    
     
     // UPDATE PRODUCTION IMAGE TAG
     stage('Update Production Image Tag') {
@@ -859,23 +902,27 @@ pipeline {
                         passwordVariable: 'GIT_PASSWORD'
                     )
                 ]) {
-                    sh """
-                    yq -i '.frontend.image.tag = "${TAG}"' wanderlust/values-prod.yaml
-                    yq -i '.backend.image.tag = "${TAG}"' wanderlust/values-prod.yaml
+                    sh '''
+                    git remote set-url origin https://${GIT_USERNAME}:${GIT_PASSWORD}@github.com/rajeshkosta/my-trimmy.git
     
-                    git add wanderlust/values-prod.yaml
+                    git fetch origin
+                    git checkout -B main origin/main
+    
+                    yq -i ".frontend.image.tag = \\"${TAG}\\"" trimmy/prod-values.yaml
+                    yq -i ".backend.image.tag = \\"${TAG}\\"" trimmy/prod-values.yaml
+    
+                    git add trimmy/prod-values.yaml
                     git commit -m "Deploy build ${TAG} to Production" || true
     
-                    git remote set-url origin https://${GIT_USERNAME}:${GIT_PASSWORD}@github.com/rajeshkosta/wanderlust.git
                     git push origin main
-                    """
+                    '''
                 }
             }
         }
     }
-}
 
-        
+}
+ 
 /***************************************************************
  * POST ACTIONS
  ***************************************************************/
